@@ -98,7 +98,7 @@ export function ResultViewer({
 
         <div
           ref={containerRef}
-          className="relative rounded-xl border border-border/60 overflow-hidden cursor-col-resize select-none bg-muted/20"
+          className="relative rounded-xl border border-border/60 overflow-hidden cursor-col-resize select-none touch-none bg-muted/20"
           onMouseDown={(e) => {
             setIsDragging(true);
             handleMove(e.clientX);
@@ -117,21 +117,13 @@ export function ResultViewer({
           />
 
           {/* Original (clipped, top layer) */}
-          <div
-            className="absolute inset-0 overflow-hidden"
-            style={{ width: `${sliderPos}%` }}
-          >
-            <img
-              src={originalPreview}
-              alt="Original"
-              className="w-full h-full object-contain"
-              style={{
-                width: containerRef.current?.offsetWidth || "100%",
-                maxHeight: "400px",
-              }}
-              draggable={false}
-            />
-          </div>
+          <img
+            src={originalPreview}
+            alt="Original"
+            className="absolute inset-0 w-full h-full object-contain"
+            style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
+            draggable={false}
+          />
 
           {/* Slider handle */}
           <div
