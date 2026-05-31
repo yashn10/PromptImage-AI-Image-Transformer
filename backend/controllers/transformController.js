@@ -31,6 +31,35 @@ async function handleTransform(req, res) {
       });
     }
 
+    // Check User Quotas & Tier
+    const user = req.user;
+    user.checkAndResetDailyQuota();
+
+    const isPro = user.tier === 'pro';
+    const MAX_FREE_TRANSFORMS = 5;
+    const MAX_FREE_SIZE = 2 * 1024 * 1024; // 2MB
+    const MAX_PRO_SIZE = 15 * 1024 * 1024; // 15MB
+
+    if (!isPro && user.dailyTransforms >= MAX_FREE_TRANSFORMS) {
+      return res.status(429).json({
+        error: "Daily limit reached",
+        message: "You have reached your free limit of 5 transformations per day. Please upgrade to Pro.",
+      });
+    }
+
+    const maxSize = isPro ? MAX_PRO_SIZE : MAX_FREE_SIZE;
+    if (req.file.size > maxSize) {
+      return res.status(413).json({
+        error: "File too large",
+        message: `Your current tier allows maximum file size of ${isPro ? '15MB' : '2MB'}.`,
+      });
+    }
+
+    // Increment usage
+    user.dailyTransforms += 1;
+    user.lastTransformDate = new Date();
+    await user.save();
+
     console.log(`\n📸 Transform request: "${prompt.trim()}"`);
 
     // Step 1: Parse prompt with Groq

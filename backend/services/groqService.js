@@ -38,7 +38,7 @@ async function parsePrompt(prompt, retryCount = 0) {
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
-      model: "llama-3.3-70b-versatile",
+      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
       temperature: 0.1,
       max_tokens: 500,
       response_format: { type: "json_object" },
@@ -65,16 +65,40 @@ async function parsePrompt(prompt, retryCount = 0) {
 
     return sanitizeInstructions(parsed);
   } catch (err) {
-    console.error(`Groq parse attempt ${retryCount + 1} failed:`, err.message);
+    console.error(`Groq parse failed:`, err.message);
+    
+    // Scale Fallback: If Groq hits 429 or other errors, use ultra-cheap OpenRouter model
+    console.warn("Falling back to OpenRouter (gpt-4o-mini)...");
+    try {
+      const fallbackResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            model: process.env.OPENROUTER_FALLBACK_MODEL || "openai/gpt-4o-mini",
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              { role: "user", content: prompt },
+            ],
+            temperature: 0.1,
+            max_tokens: 500,
+            response_format: { type: "json_object" }
+        })
+      });
 
-    // Retry once
-    if (retryCount < 1) {
-      console.log("Retrying prompt parsing...");
-      return parsePrompt(prompt, retryCount + 1);
+      if (fallbackResponse.ok) {
+        const data = await fallbackResponse.json();
+        const content = data.choices[0]?.message?.content;
+        return sanitizeInstructions(JSON.parse(content));
+      }
+    } catch (fallbackErr) {
+      console.error("Fallback also failed:", fallbackErr.message);
     }
 
-    // Fall back to defaults
-    console.warn("Using default instructions after retry failure");
+    // Ultimate fallback if both AI APIs fail
+    console.warn("Using default instructions after AI failures");
     return { ...DEFAULT_INSTRUCTIONS };
   }
 }
